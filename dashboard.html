@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+<meta charset="UTF-8">
+<title>SAFEWAY ADMIN</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0b0b0b;
+  color:white;
+  display:flex;
+}
+
+/* SIDEBAR */
+.sidebar{
+width:220px;
+height:100vh;
+background:#111;
+padding:20px;
+}
+
+.sidebar h2{
+color:red;
+text-align:center;
+}
+
+.sidebar button{
+width:100%;
+margin-top:10px;
+padding:10px;
+background:transparent;
+border:1px solid red;
+color:white;
+cursor:pointer;
+}
+
+.sidebar button:hover{
+background:red;
+}
+
+/* MAIN */
+.main{
+flex:1;
+padding:20px;
+}
+
+.card{
+background:linear-gradient(145deg,#1a1a1a,#0f0f0f);
+padding:15px;
+margin:10px 0;
+border-radius:12px;
+border-left:4px solid red;
+position:relative;
+}
+
+/* MENU 3 POINTS */
+.dots{
+position:absolute;
+top:10px;
+right:10px;
+cursor:pointer;
+font-size:20px;
+}
+
+.menu{
+display:none;
+position:absolute;
+right:10px;
+top:30px;
+background:#222;
+border:1px solid red;
+padding:10px;
+z-index:999;
+}
+
+.menu button{
+width:100%;
+background:transparent;
+border:none;
+color:white;
+cursor:pointer;
+}
+
+.menu button:hover{
+color:red;
+}
+
+.tab{display:none;}
+.tab.active{display:block;}
+
+#quickMenu{
+position:fixed;
+top:10px;
+right:10px;
+z-index:999;
+}
+
+#quickMenu button{
+background:red;
+color:white;
+border:none;
+padding:10px;
+}
+
+#quickPanel{
+display:none;
+background:#111;
+border:1px solid red;
+margin-top:10px;
+}
+
+#quickPanel button{
+width:100%;
+background:transparent;
+border:none;
+color:white;
+padding:10px;
+}
+
+#quickPanel button:hover{
+background:red;
+}
+</style>
+
+</head>
+
+<body>
+
+<!-- QUICK MENU -->
+<div id="quickMenu">
+<button onclick="toggleQuick()">⋮</button>
+
+<div id="quickPanel">
+<button onclick="showTab('dashboard')">Dashboard</button>
+<button onclick="showTab('deposits')">Dépôts</button>
+<button onclick="showTab('withdrawals')">Retraits</button>
+<button onclick="showTab('users')">Users</button>
+<button onclick="showTab('approved')">Validés</button>
+<button onclick="showTab('settings')">Système</button>
+</div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+<h2>SAFEWAY</h2>
+
+<button onclick="showTab('dashboard')">📊 Dashboard</button>
+<button onclick="showTab('deposits')">💰 Dépôts</button>
+<button onclick="showTab('withdrawals')">💸 Retraits</button>
+<button onclick="showTab('users')">👤 Users</button>
+<button onclick="showTab('approved')">✅ Validés</button>
+<button onclick="showTab('settings')">⚙ Système</button>
+<button onclick="logout()">🚪 Logout</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="tab active">
+<h1>Dashboard</h1>
+<div id="stats"></div>
+</div>
+
+<!-- DEPOSITS -->
+<div id="deposits" class="tab">
+<h1>Dépôts en attente</h1>
+<div id="depositList"></div>
+</div>
+
+<!-- WITHDRAWALS -->
+<div id="withdrawals" class="tab">
+<h1>Retraits en attente</h1>
+<div id="withdrawList"></div>
+</div>
+
+<!-- USERS -->
+<div id="users" class="tab">
+<h1>Utilisateurs</h1>
+<div id="userList"></div>
+</div>
+
+<!-- VALIDÉS -->
+<div id="approved" class="tab">
+<h1>Validés</h1>
+
+<h3>Dépôts</h3>
+<div id="approvedDeposits"></div>
+
+<h3>Retraits</h3>
+<div id="approvedWithdrawals"></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings" class="tab">
+<h1>Système</h1>
+
+<div class="card">
+<h3>Frais retrait</h3>
+<input id="fee" type="number">
+</div>
+
+<div class="card">
+<h3>Min dépôt</h3>
+<input id="minDeposit" type="number">
+</div>
+
+<div class="card">
+<h3>Min retrait</h3>
+<input id="minWithdraw" type="number">
+</div>
+
+<button onclick="updateSettings()">Sauvegarder</button>
+</div>
+
+</div>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const supabase = createClient("https://ycswpdydsgoqplkqtpsd.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc3dwZHlkc2dvcXBsa3F0cHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NjY4MTcsImV4cCI6MjA5MDU0MjgxN30.67bBMdHtcGFIJuZuY_Xd4hBN4hj86JjHVXGN3oPbKMA");
+
+if(!localStorage.getItem("admin")){
+location.href="admin_login.html";
+}
+
+/* QUICK */
+window.toggleQuick=()=>{
+const p=document.getElementById("quickPanel");
+p.style.display=p.style.display==="block"?"none":"block";
+};
+
+/* NAV */
+window.showTab=(tab)=>{
+document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+document.getElementById(tab).classList.add("active");
+
+if(tab==="dashboard") loadStats();
+if(tab==="deposits") loadDeposits();
+if(tab==="withdrawals") loadWithdrawals();
+if(tab==="users") loadUsers();
+if(tab==="approved") loadApproved();
+if(tab==="settings") loadSettings();
+};
+
+/* STATS */
+async function loadStats(){
+const u=await supabase.from("users").select("*");
+const d=await supabase.from("deposits").select("*");
+const w=await supabase.from("withdrawals").select("*");
+
+document.getElementById("stats").innerHTML=`
+<div class="card">Users: ${u.data.length}</div>
+<div class="card">Dépôts: ${d.data.length}</div>
+<div class="card">Retraits: ${w.data.length}</div>
+`;
+}
+
+/* DEPOSITS */
+async function loadDeposits(){
+const {data}=await supabase.from("deposits").select("*").eq("status","pending");
+
+document.getElementById("depositList").innerHTML=
+(data||[]).map(d=>`
+<div class="card">
+<div class="dots">⋮</div>
+<div class="menu">
+<button onclick="approveDeposit('${d.id}')">Approuver</button>
+</div>
+
+<b>ID:</b> ${d.id}<br>
+<b>User:</b> ${d.user_id}<br>
+<b>Pays:</b> ${d.country_code}<br>
+<b>Phone:</b> ${d.phone}<br>
+<b>Montant:</b> ${d.amount}<br>
+<b>Status:</b> ${d.status}<br>
+<b>Date:</b> ${new Date(d.created_at).toLocaleString()}
+</div>
+`).join("");
+}
+
+window.approveDeposit=async(id)=>{
+await supabase.from("deposits").update({status:"approved"}).eq("id",id);
+loadDeposits();
+loadApproved();
+};
+
+/* WITHDRAWALS */
+async function loadWithdrawals(){
+const {data}=await supabase.from("withdrawals").select("*").eq("status","pending");
+
+document.getElementById("withdrawList").innerHTML=
+(data||[]).map(w=>`
+<div class="card">
+<b>ID:</b> ${w.id}<br>
+<b>User:</b> ${w.user_id}<br>
+<b>Nom:</b> ${w.full_name}<br>
+<b>Pays:</b> ${w.country_code}<br>
+<b>Phone:</b> ${w.phone}<br>
+<b>Montant:</b> ${w.amount}<br>
+<b>Frais:</b> ${w.fee}<br>
+<b>Status:</b> ${w.status}<br>
+<b>Date:</b> ${new Date(w.created_at).toLocaleString()}
+</div>
+`).join("");
+}
+
+window.approveWithdraw=async(id)=>{
+await supabase.from("withdrawals").update({status:"approved"}).eq("id",id);
+loadWithdrawals();
+loadApproved();
+};
+
+/* USERS (AJOUT SANS CASSER) */
+async function loadUsers(){
+const {data}=await supabase.from("users").select("*");
+
+document.getElementById("userList").innerHTML =
+(data||[]).map(u=>`
+<div class="card">
+
+<div class="dots" onclick="toggleUserMenu(event,'${u.id}')">⋮</div>
+
+<div class="menu" id="menu-${u.id}">
+<button style="color:lime" onclick="addBalance('${u.id}',${u.balance})">+ Ajouter solde</button>
+<button style="color:red" onclick="reduceBalance('${u.id}',${u.balance})">- Réduire solde</button>
+</div>
+
+<b>ID:</b> ${u.id}<br>
+<b>Nom:</b> ${u.full_name}<br>
+<b>Pays:</b> ${u.country_code}<br>
+<b>Phone:</b> ${u.phone}<br>
+<b>Referral:</b> ${u.referral_code}<br>
+<b>Parrain:</b> ${u.referred_by}<br>
+<b>Solde:</b> ${u.balance}<br>
+<b>Date:</b> ${new Date(u.created_at).toLocaleString()}
+
+</div>
+`).join("");
+}
+
+window.toggleUserMenu=(e,id)=>{
+e.stopPropagation();
+document.querySelectorAll(".menu").forEach(m=>m.style.display="none");
+const menu=document.getElementById("menu-"+id);
+menu.style.display = menu.style.display==="block"?"none":"block";
+};
+
+window.addBalance=async(id,balance)=>{
+const a=prompt("Montant à ajouter ?");
+if(!a)return;
+
+await supabase.from("users")
+.update({balance:Number(balance)+Number(a)})
+.eq("id",id);
+
+loadUsers();
+};
+
+window.reduceBalance=async(id,balance)=>{
+const a=prompt("Montant à retirer ?");
+if(!a)return;
+
+await supabase.from("users")
+.update({balance:Number(balance)-Number(a)})
+.eq("id",id);
+
+loadUsers();
+};
+
+/* APPROVED */
+async function loadApproved(){
+const d=await supabase.from("deposits").select("*").eq("status","approved");
+const w=await supabase.from("withdrawals").select("*").eq("status","approved");
+
+document.getElementById("approvedDeposits").innerHTML=
+(d.data||[]).map(x=>`<div class="card">✔ ${x.phone} - ${x.amount}</div>`).join("");
+
+document.getElementById("approvedWithdrawals").innerHTML=
+(w.data||[]).map(x=>`<div class="card">✔ ${x.phone} - ${x.amount}</div>`).join("");
+}
+
+/* SETTINGS */
+async function loadSettings(){
+const {data}=await supabase.from("settings").select("*").eq("id",1).single();
+
+fee.value=data.withdraw_fee;
+minDeposit.value=data.min_deposit;
+minWithdraw.value=data.min_withdraw;
+}
+
+window.updateSettings=async()=>{
+await supabase.from("settings").update({
+withdraw_fee:fee.value,
+min_deposit:minDeposit.value,
+min_withdraw:minWithdraw.value
+}).eq("id",1);
+
+alert("OK");
+};
+
+/* LOGOUT */
+window.logout=()=>{
+localStorage.removeItem("admin");
+location.href="admin_login.html";
+};
+
+/* INIT */
+loadStats();
+
+</script>
+
+</body>
+</html>
