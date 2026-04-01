@@ -7,11 +7,11 @@
 
 <style>
 body{
-  margin:0;
-  font-family:Arial;
-  background:#0b0b0b;
-  color:white;
-  display:flex;
+margin:0;
+font-family:Arial;
+background:#0b0b0b;
+color:white;
+display:flex;
 }
 
 /* SIDEBAR */
@@ -154,47 +154,40 @@ background:red;
 <button onclick="showTab('approved')">✅ Validés</button>
 <button onclick="showTab('settings')">⚙ Système</button>
 <button onclick="logout()">🚪 Logout</button>
+
 </div>
 
 <!-- MAIN -->
 <div class="main">
 
-<!-- DASHBOARD -->
 <div id="dashboard" class="tab active">
 <h1>Dashboard</h1>
 <div id="stats"></div>
 </div>
 
-<!-- DEPOSITS -->
 <div id="deposits" class="tab">
 <h1>Dépôts en attente</h1>
 <div id="depositList"></div>
 </div>
 
-<!-- WITHDRAWALS -->
 <div id="withdrawals" class="tab">
 <h1>Retraits en attente</h1>
 <div id="withdrawList"></div>
 </div>
 
-<!-- USERS -->
 <div id="users" class="tab">
 <h1>Utilisateurs</h1>
 <div id="userList"></div>
 </div>
 
-<!-- VALIDÉS -->
 <div id="approved" class="tab">
 <h1>Validés</h1>
-
 <h3>Dépôts</h3>
 <div id="approvedDeposits"></div>
-
 <h3>Retraits</h3>
 <div id="approvedWithdrawals"></div>
 </div>
 
-<!-- SETTINGS -->
 <div id="settings" class="tab">
 <h1>Système</h1>
 
@@ -214,6 +207,7 @@ background:red;
 </div>
 
 <button onclick="updateSettings()">Sauvegarder</button>
+
 </div>
 
 </div>
@@ -221,11 +215,10 @@ background:red;
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const supabase = createClient("https://ycswpdydsgoqplkqtpsd.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc3dwZHlkc2dvcXBsa3F0cHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NjY4MTcsImV4cCI6MjA5MDU0MjgxN30.67bBMdHtcGFIJuZuY_Xd4hBN4hj86JjHVXGN3oPbKMA");
-
-if(!localStorage.getItem("admin")){
-location.href="admin_login.html";
-}
+const supabase = createClient(
+"https://ycswpdydsgoqplkqtpsd.supabase.co",
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc3dwZHlkc2dvcXBsa3F0cHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NjY4MTcsImV4cCI6MjA5MDU0MjgxN30.67bBMdHtcGFIJuZuY_Xd4hBN4hj86JjHVXGN3oPbKMA"
+);
 
 /* QUICK */
 window.toggleQuick=()=>{
@@ -259,62 +252,169 @@ document.getElementById("stats").innerHTML=`
 `;
 }
 
-/* DEPOSITS */
+/* ================= DEPOSITS ================= */
 async function loadDeposits(){
 const {data}=await supabase.from("deposits").select("*").eq("status","pending");
 
-document.getElementById("depositList").innerHTML=
+document.getElementById("depositList").innerHTML =
 (data||[]).map(d=>`
 <div class="card">
-<div class="dots">⋮</div>
-<div class="menu">
-<button onclick="approveDeposit('${d.id}')">Approuver</button>
+<div class="dots" onclick="toggleUserMenu(event,'d-${d.id}')">⋮</div>
+
+<div class="menu" id="menu-d-${d.id}">
+<button onclick="approveDeposit('${d.id}')">✔ Approuver</button>
+<button onclick="rejectDeposit('${d.id}')">✖ Rejeter</button>
 </div>
 
-<b>ID:</b> ${d.id}<br>
 <b>User:</b> ${d.user_id}<br>
-<b>Pays:</b> ${d.country_code}<br>
-<b>Phone:</b> ${d.phone}<br>
 <b>Montant:</b> ${d.amount}<br>
 <b>Status:</b> ${d.status}<br>
-<b>Date:</b> ${new Date(d.created_at).toLocaleString()}
 </div>
 `).join("");
 }
 
+/* DEPOT APPROVED */
 window.approveDeposit=async(id)=>{
-await supabase.from("deposits").update({status:"approved"}).eq("id",id);
+
+const { data: dep } = await supabase
+.from("deposits")
+.select("*")
+.eq("id",id)
+.single();
+
+await supabase.from("deposits")
+.update({status:"completed"})
+.eq("id",id);
+
+const { data: user } = await supabase
+.from("users")
+.select("balance")
+.eq("id",dep.user_id)
+.single();
+
+await supabase.from("users")
+.update({
+balance: Number(user.balance) + Number(dep.amount)
+})
+.eq("id",dep.user_id);
+
+await supabase.from("transactions").insert({
+user_id: dep.user_id,
+type:"deposit",
+amount:dep.amount,
+status:"completed"
+});
+
 loadDeposits();
-loadApproved();
+loadStats();
 };
 
-/* WITHDRAWALS */
+/* DEPOT REJECT */
+window.rejectDeposit=async(id)=>{
+
+const { data: dep } = await supabase
+.from("deposits")
+.select("*")
+.eq("id",id)
+.single();
+
+await supabase.from("deposits")
+.update({status:"failed"})
+.eq("id",id);
+
+await supabase.from("transactions").insert({
+user_id: dep.user_id,
+type:"deposit",
+amount:dep.amount,
+status:"failed"
+});
+
+loadDeposits();
+loadStats();
+};
+
+/* ================= WITHDRAWALS ================= */
 async function loadWithdrawals(){
 const {data}=await supabase.from("withdrawals").select("*").eq("status","pending");
 
-document.getElementById("withdrawList").innerHTML=
+document.getElementById("withdrawList").innerHTML =
 (data||[]).map(w=>`
 <div class="card">
-<b>ID:</b> ${w.id}<br>
+<div class="dots" onclick="toggleUserMenu(event,'w-${w.id}')">⋮</div>
+
+<div class="menu" id="menu-w-${w.id}">
+<button onclick="approveWithdraw('${w.id}')">✔ Approuver</button>
+<button onclick="rejectWithdraw('${w.id}')">✖ Rejeter</button>
+</div>
+
 <b>User:</b> ${w.user_id}<br>
-<b>Nom:</b> ${w.full_name}<br>
-<b>Pays:</b> ${w.country_code}<br>
-<b>Phone:</b> ${w.phone}<br>
 <b>Montant:</b> ${w.amount}<br>
-<b>Frais:</b> ${w.fee}<br>
 <b>Status:</b> ${w.status}<br>
-<b>Date:</b> ${new Date(w.created_at).toLocaleString()}
 </div>
 `).join("");
 }
 
+/* WITHDRAW APPROVED */
 window.approveWithdraw=async(id)=>{
-await supabase.from("withdrawals").update({status:"approved"}).eq("id",id);
+
+const { data: w } = await supabase
+.from("withdrawals")
+.select("*")
+.eq("id",id)
+.single();
+
+await supabase.from("withdrawals")
+.update({status:"completed"})
+.eq("id",id);
+
+await supabase.from("transactions").insert({
+user_id:w.user_id,
+type:"withdraw",
+amount:w.amount,
+status:"completed"
+});
+
 loadWithdrawals();
-loadApproved();
+loadStats();
 };
 
-/* USERS (AJOUT SANS CASSER) */
+/* WITHDRAW REJECT + REFUND */
+window.rejectWithdraw=async(id)=>{
+
+const { data: w } = await supabase
+.from("withdrawals")
+.select("*")
+.eq("id",id)
+.single();
+
+await supabase.from("withdrawals")
+.update({status:"failed"})
+.eq("id",id);
+
+const { data: user } = await supabase
+.from("users")
+.select("balance")
+.eq("id",w.user_id)
+.single();
+
+await supabase.from("users")
+.update({
+balance: Number(user.balance) + Number(w.amount)
+})
+.eq("id",w.user_id);
+
+await supabase.from("transactions").insert({
+user_id:w.user_id,
+type:"withdraw",
+amount:w.amount,
+status:"failed"
+});
+
+loadWithdrawals();
+loadStats();
+};
+
+/* USERS */
 async function loadUsers(){
 const {data}=await supabase.from("users").select("*");
 
@@ -329,28 +429,32 @@ document.getElementById("userList").innerHTML =
 <button style="color:red" onclick="reduceBalance('${u.id}',${u.balance})">- Réduire solde</button>
 </div>
 
-<b>ID:</b> ${u.id}<br>
-<b>Nom:</b> ${u.full_name}<br>
-<b>Pays:</b> ${u.country_code}<br>
-<b>Phone:</b> ${u.phone}<br>
-<b>Referral:</b> ${u.referral_code}<br>
-<b>Parrain:</b> ${u.referred_by}<br>
-<b>Solde:</b> ${u.balance}<br>
-<b>Date:</b> ${new Date(u.created_at).toLocaleString()}
+<b>${u.full_name || ""}</b><br>
+Pays: ${u.country_code || ""}<br>
+Phone: ${u.phone || ""}<br>
+Solde: ${u.balance || 0}
 
 </div>
 `).join("");
 }
 
+/* MENU FIX */
 window.toggleUserMenu=(e,id)=>{
 e.stopPropagation();
 document.querySelectorAll(".menu").forEach(m=>m.style.display="none");
 const menu=document.getElementById("menu-"+id);
-menu.style.display = menu.style.display==="block"?"none":"block";
+if(menu){
+menu.style.display=menu.style.display==="block"?"none":"block";
+}
 };
 
+document.addEventListener("click",()=>{
+document.querySelectorAll(".menu").forEach(m=>m.style.display="none");
+});
+
+/* ADD / REDUCE */
 window.addBalance=async(id,balance)=>{
-const a=prompt("Montant à ajouter ?");
+const a=prompt("Montant ?");
 if(!a)return;
 
 await supabase.from("users")
@@ -361,7 +465,7 @@ loadUsers();
 };
 
 window.reduceBalance=async(id,balance)=>{
-const a=prompt("Montant à retirer ?");
+const a=prompt("Montant ?");
 if(!a)return;
 
 await supabase.from("users")
@@ -373,14 +477,14 @@ loadUsers();
 
 /* APPROVED */
 async function loadApproved(){
-const d=await supabase.from("deposits").select("*").eq("status","approved");
-const w=await supabase.from("withdrawals").select("*").eq("status","approved");
+const d=await supabase.from("deposits").select("*").eq("status","completed");
+const w=await supabase.from("withdrawals").select("*").eq("status","completed");
 
-document.getElementById("approvedDeposits").innerHTML=
-(d.data||[]).map(x=>`<div class="card">✔ ${x.phone} - ${x.amount}</div>`).join("");
+document.getElementById("approvedDeposits").innerHTML =
+(d.data||[]).map(x=>`<div class="card">✔ ${x.amount}</div>`).join("");
 
-document.getElementById("approvedWithdrawals").innerHTML=
-(w.data||[]).map(x=>`<div class="card">✔ ${x.phone} - ${x.amount}</div>`).join("");
+document.getElementById("approvedWithdrawals").innerHTML =
+(w.data||[]).map(x=>`<div class="card">✔ ${x.amount}</div>`).join("");
 }
 
 /* SETTINGS */
